@@ -8,6 +8,8 @@ export const MainLayout = () => {
     const { authState } = useAuth();
     const location = useLocation();
 
+    if (authState.loading) return <p className="p-4" role="status">Restaurando sesión…</p>;
+
     if (!authState.user) {
         return <Navigate to={paths.login} replace state={{ from: location.pathname + location.search }} />;
     }

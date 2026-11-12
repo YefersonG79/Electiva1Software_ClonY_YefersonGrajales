@@ -1,15 +1,20 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../auth/hooks/useAuth';
 import { paths } from '../routes/paths';
 import { UserStats } from '../components/users/UserStats';
 import { PageHeading } from '../components/common/PageHeading';
+import { UserSearch } from '../components/users/UserSearch';
 
 export const HomePage = () => {
     const { authState } = useAuth();
+    const location = useLocation();
 
     return (
         <>
             <PageHeading title="Inicio" subtitle="Tu comunidad" />
+            {(location.state?.registered || location.state?.signedIn) && <p className="alert alert-success m-3 mb-0" role="status">
+                {location.state?.registered ? 'Tu cuenta se creó correctamente.' : 'Iniciaste sesión correctamente.'}
+            </p>}
             <section className="card-body p-4">
                 <h2 className="h4">Hola, {authState.user?.fullName.split(' ')[0]}</h2>
                 <p className="text-body-secondary">Comparte una publicación o revisa las novedades de tu comunidad.</p>
@@ -19,6 +24,7 @@ export const HomePage = () => {
                     <Link className="btn btn-outline-light" to={paths.feed}>Ver feed</Link>
                 </div>
             </section>
+            <UserSearch />
             <section className="list-group list-group-flush border-top" aria-label="Tu comunidad">
                 <Link className="list-group-item list-group-item-action p-3" to={paths.following}>
                     <h2 className="h6 mb-1">Personas que sigues</h2>

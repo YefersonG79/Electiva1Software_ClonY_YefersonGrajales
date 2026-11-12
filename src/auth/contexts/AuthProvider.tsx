@@ -1,38 +1,53 @@
-
-import { useReducer, type ReactNode } from 'react';
+﻿import { useEffect, useReducer, type ReactNode } from 'react';
+import { browserLocalPersistence, onAuthStateChanged, setPersistence, signOut } from 'firebase/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { AuthContext } from './AuthContext';
 import { authReducer } from '../reducers/AuthReducer';
 import type { AuthState, User } from '../types/AuthReducerInterfaces';
-import { demoUser } from '../../data/mockUsers';
+import { requireFirebase } from '../../firebase/config';
+import { registerUser, signInByUsername, signInWithGoogle } from '../../services/auth';
+import { errorMessage } from '../../services/errors';
 
-const initialState: AuthState = {
-    logged: false,
-    user: null,
-    errorMessage: null,
-};
+const initialState: AuthState = { loading: true, logged: false, user: null, errorMessage: null };
 
-interface AuthProviderProps {
-    children: ReactNode;
-}
-
-export const AuthProvider = ({ children }: AuthProviderProps) => {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [authState, dispatch] = useReducer(authReducer, initialState);
 
-    const login = (username: string, profile?: Pick<User, 'fullName' | 'email'>) => {
-        dispatch({
-            type: 'login',
-            payload: {
-                ...demoUser,
-                ...profile,
-                username: username.trim().replace(/^@/, '') || demoUser.username,
-            },
-        });
-    };
+    useEffect(() => {
+        let active = true;
+        let stopAuth = () => {};
+        let stopProfile = () => {};
+        let generation = 0;
+        const fail = (error: unknown) => {
+            if (active) dispatch({ type: 'error', payload: errorMessage(error) });
+        };
+        const start = async () => {
+            const { auth, db } = requireFirebase();
+            await setPersistence(auth, browserLocalPersistence);
+            if (!active) return;
+            stopAuth = onAuthStateChanged(auth, (identity) => {
+                const currentGeneration = ++generation;
+                stopProfile();
+                if (!identity) { dispatch({ type: 'logout' }); return; }
+                dispatch({ type: 'loading' });
+                stopProfile = onSnapshot(doc(db, 'users', identity.uid), (snapshot) => {
+                    if (!active || generation !== currentGeneration) return;
+                    if (!snapshot.exists()) {
+                        dispatch({ type: 'error', payload: 'El perfil aún no está disponible. Completa el registro o vuelve a entrar con Google.' });
+                        return;
+                    }
+                    dispatch({ type: 'login', payload: { ...snapshot.data() as User, email: identity.email || undefined } });
+                }, fail);
+            }, fail);
+        };
+        void start().catch(fail);
+        return () => { active = false; stopAuth(); stopProfile(); };
+    }, []);
 
-    const logout = () => dispatch({ type: 'logout' });
+    const logout = async () => { await signOut(requireFirebase().auth); };
 
     return (
-        <AuthContext.Provider value={{ authState, login, logout }}>
+        <AuthContext.Provider value={{ authState, login: signInByUsername, register: registerUser, loginWithGoogle: signInWithGoogle, logout }}>
             {children}
         </AuthContext.Provider>
     );
