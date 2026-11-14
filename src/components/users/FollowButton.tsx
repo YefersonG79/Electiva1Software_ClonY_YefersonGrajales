@@ -10,8 +10,9 @@ export const FollowButton = ({ userId }: { userId: string }) => {
     const [pending, setPending] = useState(false);
     const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
+    const [followedId, setFollowedId] = useState('');
     if (!authState.user || userId === authState.user.uid) return null;
-    const isFollowing = relationships.some((item) =>
+    const isFollowing = followedId === userId || relationships.some((item) =>
         item.followerId === authState.user?.uid && item.followingId === userId,
     );
 
@@ -22,6 +23,7 @@ export const FollowButton = ({ userId }: { userId: string }) => {
         setNotice('');
         try {
             const result = await followUser(userId);
+            setFollowedId(userId);
             setNotice(result === 'already-following' ? 'Ya sigues a este usuario.' : 'Ahora sigues a este usuario.');
         } catch (failure) { setError(errorMessage(failure)); }
         finally { setPending(false); }
