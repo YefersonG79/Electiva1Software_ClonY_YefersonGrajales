@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useMockData } from '../../data/useMockData';
+import { useSocialData } from '../../data/useSocialData';
 import type { Tweet } from '../../data/types';
 import { getUserTweetsPath } from '../../routes/paths';
 import { Avatar } from '../common/Avatar';
@@ -9,7 +9,7 @@ const dateFormatter = new Intl.DateTimeFormat('es-CO', {
 });
 
 export const TweetCard = ({ tweet }: { tweet: Tweet }) => {
-    const { users } = useMockData();
+    const { users } = useSocialData();
     const author = users.find((user) => user.uid === tweet.authorId);
     if (!author) return null;
 

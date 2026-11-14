@@ -1,14 +1,16 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../auth/hooks/useAuth';
-import { useMockData } from '../../data/useMockData';
+import { useUserStats } from '../../hooks/useUserStats';
+import { QueryStatus } from '../common/QueryStatus';
 import { paths } from '../../routes/paths';
 
 export const UserStats = ({ userId }: { userId: string }) => {
     const { authState } = useAuth();
-    const { relationships } = useMockData();
+    const counts = useUserStats(userId);
+    if (counts.loading || counts.error) return <QueryStatus loading={counts.loading} error={counts.error} />;
     const stats = [
-        { label: 'Seguidos', count: relationships.filter((item) => item.followerId === userId).length, to: paths.following },
-        { label: 'Seguidores', count: relationships.filter((item) => item.followingId === userId).length, to: paths.followers },
+        { label: 'Seguidos', count: counts.following, to: paths.following },
+        { label: 'Seguidores', count: counts.followers, to: paths.followers },
     ];
 
     return (

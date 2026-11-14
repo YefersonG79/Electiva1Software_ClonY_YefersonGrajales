@@ -7,6 +7,7 @@ export const paths = {
     following: '/following',
     followers: '/followers',
     userTweets: '/users/:username',
+    profileSettings: '/settings/profile',
     feed: '/feed',
 } as const;
 

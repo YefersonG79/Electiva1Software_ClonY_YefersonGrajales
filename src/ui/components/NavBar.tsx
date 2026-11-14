@@ -3,15 +3,22 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { paths } from '../../routes/paths';
 import { Avatar } from '../../components/common/Avatar';
+import { useState } from 'react';
+import { errorMessage } from '../../services/errors';
 
 export const NavBar = () => {
     const { authState, logout } = useAuth();
     const navigate = useNavigate();
     const user = authState.user;
+    const [pending, setPending] = useState(false);
+    const [error, setError] = useState('');
 
-    const onLogout = () => {
-        logout();
-        navigate(paths.login, { replace: true });
+    const onLogout = async () => {
+        setPending(true);
+        setError('');
+        try { await logout(); navigate(paths.login, { replace: true }); }
+        catch (failure) { setError(errorMessage(failure)); }
+        finally { setPending(false); }
     };
 
     return (
@@ -29,8 +36,9 @@ export const NavBar = () => {
                                 <span className="text-body-secondary">@{user.username}</span>
                             </span>
                         </div>
-                        <button className="btn btn-outline-light btn-sm" onClick={onLogout}>
-                            Cerrar sesión
+                        {error && <span className="text-danger small" role="alert">{error}</span>}
+                        <button className="btn btn-outline-light btn-sm" disabled={pending} onClick={onLogout}>
+                            {pending ? 'Cerrando…' : 'Cerrar sesión'}
                         </button>
                     </div>
                 )}

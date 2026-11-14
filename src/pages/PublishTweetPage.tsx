@@ -1,15 +1,14 @@
 import { useNavigate } from 'react-router-dom';
 import { PageHeading } from '../components/common/PageHeading';
 import { TweetForm } from '../components/tweets/TweetForm';
-import { useMockData } from '../data/useMockData';
+import { publishTweet } from '../services/tweets';
 import { paths } from '../routes/paths';
 
 export const PublishTweetPage = () => {
-    const { publishTweet } = useMockData();
     const navigate = useNavigate();
 
-    const onPublish = (content: string) => {
-        publishTweet(content);
+    const onPublish = async (content: string) => {
+        await publishTweet(content);
         navigate(paths.feed, { state: { published: true } });
     };
 

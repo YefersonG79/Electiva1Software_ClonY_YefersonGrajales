@@ -9,8 +9,11 @@ export const authReducer = (
     action: AuthReducerAction
 ): AuthState => {
     switch (action.type) {
+        case 'loading':
+            return { logged: false, user: null, loading: true, errorMessage: null };
         case 'login':
             return {
+                loading: false,
                 logged: true,
                 user: action.payload,
                 errorMessage: null,
@@ -18,6 +21,7 @@ export const authReducer = (
 
         case 'logout':
             return {
+                loading: false,
                 logged: false,
                 user: null,
                 errorMessage: null,
@@ -26,6 +30,7 @@ export const authReducer = (
         case 'error':
             return {
                 ...state,
+                loading: false,
                 errorMessage: action.payload,
             };
 

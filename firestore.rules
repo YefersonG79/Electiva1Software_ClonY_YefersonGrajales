@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function owns(uid) { return signedIn() && request.auth.uid == uid; }
+    function profilePath(uid) { return /databases/$(database)/documents/users/$(uid); }
+    function namePath(name) { return /databases/$(database)/documents/usernames/$(name); }
+    function privatePath(uid) { return /databases/$(database)/documents/privateUsers/$(uid); }
+    function validProfile(data, uid) {
+      return data.keys().hasAll(['uid', 'fullName', 'username', 'photoURL', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'fullName', 'username', 'photoURL', 'createdAt'])
+        && data.uid == uid
+        && data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 100
+        && data.fullName.matches('.*[^\\s].*')
+        && data.username is string && data.username.matches('^[a-z0-9_]{3,30}$')
+        && data.photoURL == null;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create: if owns(uid) && validProfile(request.resource.data, uid)
+        && request.resource.data.createdAt == request.time
+        && !exists(namePath(request.resource.data.username))
+        && getAfter(namePath(request.resource.data.username)).data.uid == uid
+        && getAfter(privatePath(uid)).data.uid == uid;
+      allow update: if owns(uid) && validProfile(request.resource.data, uid)
+        && (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fullName'])
+          || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['username'])
+            && request.resource.data.username != resource.data.username
+            && get(namePath(resource.data.username)).data.uid == uid
+            && !exists(namePath(request.resource.data.username))
+            && getAfter(namePath(request.resource.data.username)).data.uid == uid
+            && !existsAfter(namePath(resource.data.username))));
+      allow delete: if false;
+    }
+
+    match /usernames/{username} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() && username.matches('^[a-z0-9_]{3,30}$')
+        && request.resource.data.keys().hasAll(['uid', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && (!exists(profilePath(request.auth.uid))
+          || get(profilePath(request.auth.uid)).data.username != username)
+        && getAfter(profilePath(request.auth.uid)).data.username == username;
+      allow update: if false;
+      // Release only the owner's current handle, in the same atomic profile rename.
+      allow delete: if owns(resource.data.uid)
+        && get(profilePath(request.auth.uid)).data.username == username
+        && getAfter(profilePath(request.auth.uid)).data.username != username
+        && getAfter(namePath(getAfter(profilePath(request.auth.uid)).data.username)).data.uid == request.auth.uid;
+    }
+
+    match /privateUsers/{uid} {
+      allow get: if owns(uid);
+      allow list: if false;
+      allow create: if owns(uid)
+        && request.resource.data.keys().hasAll(['uid', 'email', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'createdAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.createdAt == request.time
+        && !exists(profilePath(uid))
+        && getAfter(profilePath(uid)).data.uid == uid;
+      allow update, delete: if false;
+    }
+
+    match /tweets/{tweetId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && exists(profilePath(request.auth.uid))
+        && request.resource.data.keys().hasAll(['id', 'authorId', 'content', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['id', 'authorId', 'content', 'createdAt'])
+        && request.resource.data.id == tweetId
+        && request.resource.data.authorId == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.content is string
+        && request.resource.data.content.matches('[\\s\\S]{1,280}')
+        && request.resource.data.content.matches('[\\s\\S]*[^\\s][\\s\\S]*');
+      allow update, delete: if false;
+    }
+
+    match /follows/{followerId}/followEdges/{followingId} {
+      allow create: if owns(followerId) && followerId != followingId
+        && exists(profilePath(followerId)) && exists(profilePath(followingId))
+        && request.resource.data.keys().hasAll(['followerId', 'followingId', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['followerId', 'followingId', 'createdAt'])
+        && request.resource.data.followerId == followerId
+        && request.resource.data.followingId == followingId
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+    // Collection-group reads support the current user's lists and live counters.
+    match /{path=**}/followEdges/{edgeId} {
+      allow read: if signedIn();
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

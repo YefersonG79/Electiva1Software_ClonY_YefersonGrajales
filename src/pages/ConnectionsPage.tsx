@@ -4,16 +4,19 @@ import { PageHeading } from '../components/common/PageHeading';
 import { Pagination } from '../components/common/Pagination';
 import { UserCard } from '../components/users/UserCard';
 import { getFollowers, getFollowingUsers } from '../data/socialQueries';
-import { useMockData } from '../data/useMockData';
+import { useSocialData } from '../data/useSocialData';
+import { QueryStatus } from '../components/common/QueryStatus';
 import { usePagination } from '../hooks/usePagination';
 
 export const ConnectionsPage = ({ mode }: { mode: 'following' | 'followers' }) => {
     const { authState } = useAuth();
-    const { users, relationships } = useMockData();
+    const { users, relationships, loading, error } = useSocialData();
     const query = mode === 'following' ? getFollowingUsers : getFollowers;
     const connections = query(users, relationships, authState.user?.uid ?? '');
     const pagination = usePagination(connections);
     const title = mode === 'following' ? 'Seguidos' : 'Seguidores';
+
+    if (loading || error) return <><PageHeading title={title} subtitle="Tu comunidad" /><QueryStatus loading={loading} error={error} /></>;
 
     return (
         <>
