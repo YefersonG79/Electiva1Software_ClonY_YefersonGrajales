@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { runMilestone3Browser } from './milestone3.browser.mjs';
+import { runUnfollowBrowser } from './unfollow.browser.mjs';
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -31,14 +32,33 @@ export async function runBrowser() {
     const pending = new Map();
     const errors = [];
     const credentialRequests = [];
+    const firestoreCommits = [];
     const completed = [];
     let requestId = 0;
-    const send = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
+    const request = (method, params = {}, sessionId) => new Promise((resolve, reject) => {
         const id = ++requestId;
         const timer = setTimeout(() => { pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); }, 20000);
         pending.set(id, { resolve, reject, timer });
         socket.send(JSON.stringify({ id, method, params, sessionId }));
     });
+    const send = async (method, params = {}, sessionId) => {
+        if (method !== 'Page.reload') return request(method, params, sessionId);
+        // Do not let a condition match the previous document while reload starts.
+        const marker = `reload-${requestId}`;
+        await request('Runtime.evaluate', { expression: `globalThis.__clonYReloadMarker = ${JSON.stringify(marker)}` }, sessionId);
+        await request(method, params, sessionId);
+        for (let attempt = 0; attempt < 150; attempt += 1) {
+            try {
+                const state = await request('Runtime.evaluate', {
+                    expression: `document.readyState === 'complete' && globalThis.__clonYReloadMarker !== ${JSON.stringify(marker)}`,
+                    returnByValue: true,
+                }, sessionId);
+                if (state.result?.value === true) return {};
+            } catch { /* The old execution context may disappear during navigation. */ }
+            await pause(100);
+        }
+        throw new Error('Browser reload did not finish');
+    };
     const evaluate = async (expression, sessionId) => {
         const value = await send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true, userGesture: true }, sessionId);
         if (value.exceptionDetails) throw new Error(value.exceptionDetails.exception?.description || value.exceptionDetails.text);
@@ -94,6 +114,7 @@ export async function runBrowser() {
             } else if (message.method === 'Network.requestWillBeSent' && message.params.request.method === 'POST') {
                 const url = message.params.request.url;
                 if (url.includes('accounts:signInWithPassword') || url.includes('/signInWithUsername')) credentialRequests.push(url);
+                if (url.includes('/documents:commit')) firestoreCommits.push(url);
             }
         });
         await send('Page.enable');
@@ -141,12 +162,14 @@ export async function runBrowser() {
         await evaluate('document.querySelector("#search-username").form.requestSubmit()');
         await waitFor('Boolean(document.querySelector(".user-card"))');
         await clickText('Seguir');
-        await waitFor('document.body.innerText.includes("Ahora sigues a este usuario")');
+        await waitFor('document.querySelector(".user-card button")?.textContent === "Siguiendo" && !document.querySelector(".user-card button").disabled');
         await waitFor('document.querySelector(".user-stats")?.innerText.includes("1 Seguidos")');
         check('case-insensitive handle search and following update live counter');
         await evaluate('document.querySelector("#search-username").form.requestSubmit()');
-        await waitFor('document.body.innerText.includes("Ya sigues a este usuario")');
-        check('already-following notification and disabled duplicate action');
+        await waitFor('document.querySelector(".user-card button")?.textContent === "Siguiendo" && !document.querySelector(".user-card button").disabled');
+        assert.equal(await evaluate('document.querySelector(".user-card button").getAttribute("aria-pressed")'), 'true');
+        assert.equal(await evaluate('Boolean(document.querySelector(".user-card [role=status]"))'), false);
+        check('following state supports unfollow without redundant success messages');
         await screenshot('home');
         await clickText('Seguidos');
         await waitFor('document.querySelectorAll(".user-card").length === 1');
@@ -391,6 +414,7 @@ export async function runBrowser() {
         await waitFor('document.querySelector("header.navbar")?.textContent.includes("@google_custom")');
         check('unchanged Google button completes the emulator popup flow and restores the original persistent account');
         await runMilestone3Browser({ evaluate, waitFor, navigate, clickText, field, send, check, screenshot });
+        await runUnfollowBrowser({ evaluate, waitFor, navigate, clickText, field, send, check, screenshot, commits: firestoreCommits });
         assert.deepEqual(errors, [], 'Unexpected browser runtime errors');
         check('no browser runtime exceptions');
         await writeFile(path.join(output, 'browser-results.json'), JSON.stringify({ completed, errors }, null, 2));

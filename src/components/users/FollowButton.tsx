@@ -1,43 +1,42 @@
 import { useAuth } from '../../auth/hooks/useAuth';
 import { useSocialData } from '../../data/useSocialData';
-import { useState } from 'react';
-import { followUser } from '../../services/follows';
-import { errorMessage } from '../../services/errors';
+import { useRef, useState } from 'react';
+import { followUser, unfollowUser } from '../../services/follows';
+import { errorMessage, reportFirestoreError } from '../../services/errors';
 
 export const FollowButton = ({ userId }: { userId: string }) => {
     const { authState } = useAuth();
-    const { relationships, loading } = useSocialData();
+    const { relationships, loading, error: relationshipError } = useSocialData();
     const [pending, setPending] = useState(false);
-    const [notice, setNotice] = useState('');
     const [error, setError] = useState('');
-    const [followedId, setFollowedId] = useState('');
+    const inFlight = useRef(false);
     if (!authState.user || userId === authState.user.uid) return null;
-    const isFollowing = followedId === userId || relationships.some((item) =>
+    const isFollowing = relationships.some((item) =>
         item.followerId === authState.user?.uid && item.followingId === userId,
     );
 
-    const follow = async () => {
-        if (pending) return;
+    const toggleFollow = async () => {
+        if (inFlight.current || loading || relationshipError) return;
+        inFlight.current = true;
         setPending(true);
         setError('');
-        setNotice('');
         try {
-            const result = await followUser(userId);
-            setFollowedId(userId);
-            setNotice(result === 'already-following' ? 'Ya sigues a este usuario.' : 'Ahora sigues a este usuario.');
-        } catch (failure) { setError(errorMessage(failure)); }
-        finally { setPending(false); }
+            if (isFollowing) await unfollowUser(userId);
+            else await followUser(userId);
+        } catch (failure) {
+            reportFirestoreError('Cambio de seguimiento', failure);
+            setError(errorMessage(failure));
+        } finally { inFlight.current = false; setPending(false); }
     };
 
     return (
         <div className="text-end">
             <button className={`btn btn-sm flex-shrink-0 ${isFollowing ? 'btn-outline-light' : 'btn-primary'}`}
-                disabled={isFollowing || pending || loading} onClick={follow}>
-                {pending ? 'Siguiendo…' : isFollowing ? 'Siguiendo' : 'Seguir'}
+                disabled={pending || loading || !!relationshipError} onClick={toggleFollow}
+                aria-pressed={isFollowing} aria-busy={pending} title={isFollowing ? 'Dejar de seguir' : 'Seguir'}>
+                {pending ? 'Guardando…' : isFollowing ? 'Siguiendo' : 'Seguir'}
             </button>
-            {notice && <p className="small text-success mb-0 mt-1" role="status">{notice}</p>}
-            {isFollowing && !notice && <p className="small text-body-secondary mb-0 mt-1">Ya sigues a este usuario.</p>}
-            {error && <p className="small text-danger mb-0 mt-1" role="alert">{error}</p>}
+            {(error || relationshipError) && <p className="small text-danger mb-0 mt-1" role="alert">{error || relationshipError}</p>}
         </div>
     );
 };
