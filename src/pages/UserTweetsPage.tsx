@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/hooks/useAuth';
 import { PageHeading } from '../components/common/PageHeading';
 import { EmptyState } from '../components/common/EmptyState';
@@ -14,6 +14,8 @@ import { paths } from '../routes/paths';
 
 export const UserTweetsPage = () => {
     const { username } = useParams();
+    const location = useLocation();
+    const returnTo: unknown = location.state?.fromList;
     const { authState } = useAuth();
     const { users, loading, error } = useSocialData();
     const user = users.find((item) => item.username === normalizeUsername(username || ''));
@@ -34,6 +36,9 @@ export const UserTweetsPage = () => {
     return (
         <>
             <PageHeading title="Perfil" subtitle={result.loading ? 'Cargando publicaciones…' : `${result.pagination.totalItems} publicaciones`} />
+            {typeof returnTo === 'string' && returnTo.startsWith('/') && !returnTo.startsWith('//') && (
+                <Link className="align-self-start m-3 mb-0" to={returnTo}>Volver a la lista</Link>
+            )}
             <section className="profile-details p-3" aria-label={`Perfil de ${user.fullName}`}>
                 <div className="d-flex align-items-center justify-content-between gap-3 mb-3">
                     <Avatar user={user} large />

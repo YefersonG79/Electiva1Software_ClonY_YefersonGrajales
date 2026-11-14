@@ -3,7 +3,8 @@ import type { User } from '../auth/types/AuthReducerInterfaces';
 import type { Relationship, Tweet } from './types';
 
 const sortUsers = (users: User[]) =>
-    [...users].sort((first, second) => first.fullName.localeCompare(second.fullName, 'es', { sensitivity: 'base' }));
+    [...users].sort((first, second) => first.fullName.localeCompare(second.fullName, 'es', { sensitivity: 'base' })
+        || first.username.localeCompare(second.username, 'es') || first.uid.localeCompare(second.uid));
 
 export const getFollowingUsers = (users: User[], relationships: Relationship[], userId: string) => {
     const ids = new Set(relationships.filter((item) => item.followerId === userId).map((item) => item.followingId));

@@ -21,9 +21,9 @@ export const TweetCard = ({ tweet }: { tweet: Tweet }) => {
             <div className="flex-grow-1 min-w-0">
                 <div className="d-flex flex-wrap align-items-baseline gap-1 small">
                     <Link className="tweet-author text-body text-decoration-none text-break" to={getUserTweetsPath(author.username)}>
-                        <strong>{author.fullName}</strong> <span className="text-body-secondary">@{author.username}</span>
+                        <strong>{author.fullName}</strong>, <span className="text-body-secondary">@{author.username}</span>
                     </Link>
-                    <span className="text-body-secondary" aria-hidden="true">·</span>
+                    <span className="text-body-secondary" aria-hidden="true">-</span>
                     <time className="text-body-secondary" dateTime={tweet.createdAt}>{dateFormatter.format(new Date(tweet.createdAt))}</time>
                 </div>
                 <p className="tweet-body mt-2 mb-0">{tweet.content}</p>

@@ -23,6 +23,8 @@ export const BaseRouter = () => (
             <Route path={paths.publish} element={<PublishTweetPage />} />
             <Route path={paths.following} element={<ConnectionsPage mode="following" />} />
             <Route path={paths.followers} element={<ConnectionsPage mode="followers" />} />
+            <Route path={paths.userFollowing} element={<ConnectionsPage mode="following" />} />
+            <Route path={paths.userFollowers} element={<ConnectionsPage mode="followers" />} />
             <Route path={paths.userTweets} element={<UserTweetsPage />} />
             <Route path={paths.profileSettings} element={<ProfileSettingsPage />} />
             <Route path={paths.feed} element={<FeedPage />} />

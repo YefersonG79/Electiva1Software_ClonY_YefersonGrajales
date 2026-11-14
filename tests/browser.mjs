@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { runMilestone3Browser } from './milestone3.browser.mjs';
 
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -389,6 +390,7 @@ export async function runBrowser() {
         await send('Page.reload');
         await waitFor('document.querySelector("header.navbar")?.textContent.includes("@google_custom")');
         check('unchanged Google button completes the emulator popup flow and restores the original persistent account');
+        await runMilestone3Browser({ evaluate, waitFor, navigate, clickText, field, send, check, screenshot });
         assert.deepEqual(errors, [], 'Unexpected browser runtime errors');
         check('no browser runtime exceptions');
         await writeFile(path.join(output, 'browser-results.json'), JSON.stringify({ completed, errors }, null, 2));

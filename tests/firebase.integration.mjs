@@ -23,7 +23,7 @@ const check = async (name, run) => {
     console.log(`PASS ${name}`);
 };
 
-function client() {
+export function client() {
     const app = initializeApp({ projectId, apiKey: 'demo-key', appId: 'demo-app' }, `test-${clients.length}`);
     const auth = getAuth(app);
     const db = getFirestore(app);
@@ -36,11 +36,11 @@ function client() {
     return value;
 }
 
-async function account(value, label) {
+export async function account(value, label) {
     return (await createUserWithEmailAndPassword(value.auth, `${label}@example.test`, 'Test-password-123')).user;
 }
 
-async function reserve(value, identity, username) {
+export async function reserve(value, identity, username) {
     return runTransaction(value.db, async (transaction) => {
         const name = doc(value.db, 'usernames', username);
         if ((await transaction.get(name)).exists()) throw new Error('Username taken');
@@ -53,12 +53,12 @@ async function reserve(value, identity, username) {
     });
 }
 
-async function rejected(promise) {
+export async function rejected(promise) {
     await assert.rejects(promise, (error) => error.code === 'permission-denied');
 }
 
 // Exercise the multi-document security contract independently of the browser service.
-async function rename(value, username) {
+export async function rename(value, username) {
     const uid = value.auth.currentUser.uid;
     return runTransaction(value.db, async (transaction) => {
         const profileRef = doc(value.db, 'users', uid);
@@ -86,7 +86,7 @@ function tweet(value, uid, content, extra = {}) {
     return setDoc(ref, { id: ref.id, authorId: uid, content, createdAt: serverTimestamp(), ...extra });
 }
 
-async function follow(value, followerId, followingId) {
+export async function follow(value, followerId, followingId) {
     return runTransaction(value.db, async (transaction) => {
         const ref = doc(value.db, 'follows', followerId, 'followEdges', followingId);
         if ((await transaction.get(ref)).exists()) return false;
