@@ -5,7 +5,7 @@ import { AuthContext } from './AuthContext';
 import { authReducer } from '../reducers/AuthReducer';
 import type { AuthState, User } from '../types/AuthReducerInterfaces';
 import { requireFirebase } from '../../firebase/config';
-import { registerUser, signInByUsername, signInWithGoogle } from '../../services/auth';
+import { registerUser, signInWithCredentials, signInWithGoogle } from '../../services/auth';
 import { errorMessage } from '../../services/errors';
 
 const initialState: AuthState = { loading: true, logged: false, user: null, errorMessage: null };
@@ -47,7 +47,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = async () => { await signOut(requireFirebase().auth); };
 
     return (
-        <AuthContext.Provider value={{ authState, login: signInByUsername, register: registerUser, loginWithGoogle: signInWithGoogle, logout }}>
+        <AuthContext.Provider value={{ authState, login: signInWithCredentials, register: registerUser, loginWithGoogle: signInWithGoogle, logout }}>
             {children}
         </AuthContext.Provider>
     );

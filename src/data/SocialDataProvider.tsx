@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { collection, collectionGroup, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, collectionGroup, query, where } from 'firebase/firestore';
 import { useAuth } from '../auth/hooks/useAuth';
 import type { User } from '../auth/types/AuthReducerInterfaces';
 import { requireFirebase } from '../firebase/config';
 import { errorMessage } from '../services/errors';
+import { subscribeToQuery } from '../services/firestoreQueries';
 import { SocialDataContext, type SocialData } from './SocialDataContext';
 import type { Relationship } from './types';
 
@@ -19,27 +20,30 @@ export const SocialDataProvider = ({ children }: { children: ReactNode }) => {
         let users: User[] = [];
         const edges: Relationship[][] = [[], []];
         const ready = [false, false, false];
-        let failed = false;
+        const errors = ['', '', ''];
         const update = () => {
-            if (!active || failed) return;
+            if (!active) return;
             const unique = new Map(edges.flat().map((edge) => [`${edge.followerId}:${edge.followingId}`, edge]));
-            setState({ uid, users, relationships: [...unique.values()], loading: !ready.every(Boolean), error: null });
+            setState({ uid, users, relationships: [...unique.values()], loading: !ready.every(Boolean), error: errors.find(Boolean) || null });
         };
-        const fail = (error: unknown) => {
-            failed = true;
-            if (active) setState({ uid, users: [], relationships: [], loading: false, error: errorMessage(error) });
+        const fail = (index: number) => (error: unknown) => {
+            ready[index] = true;
+            errors[index] = errorMessage(error);
+            update();
         };
-        const stops = [onSnapshot(collection(db, 'users'), (snapshot) => {
+        const stops = [subscribeToQuery(collection(db, 'users'), 'users: perfiles de la comunidad', (snapshot) => {
             users = snapshot.docs.map((item) => item.data() as User);
             ready[0] = true;
+            errors[0] = '';
             update();
-        }, fail)];
+        }, fail(0))];
         ['followerId', 'followingId'].forEach((field, index) => {
-            stops.push(onSnapshot(query(collectionGroup(db, 'followEdges'), where(field, '==', uid)), (snapshot) => {
+            stops.push(subscribeToQuery(query(collectionGroup(db, 'followEdges'), where(field, '==', uid)), `followEdges: ${field} == UID (comunidad)`, (snapshot) => {
                 edges[index] = snapshot.docs.map((item) => item.data() as Relationship);
                 ready[index + 1] = true;
+                errors[index + 1] = '';
                 update();
-            }, fail));
+            }, fail(index + 1)));
         });
         return () => { active = false; stops.forEach((stop) => stop()); };
     }, [uid]);

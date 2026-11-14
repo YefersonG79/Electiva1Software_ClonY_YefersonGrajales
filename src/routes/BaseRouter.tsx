@@ -9,6 +9,7 @@ import { PublishTweetPage } from '../pages/PublishTweetPage';
 import { ConnectionsPage } from '../pages/ConnectionsPage';
 import { UserTweetsPage } from '../pages/UserTweetsPage';
 import { FeedPage } from '../pages/FeedPage';
+import { ProfileSettingsPage } from '../pages/ProfileSettingsPage';
 import { paths } from './paths';
 
 export const BaseRouter = () => (
@@ -23,6 +24,7 @@ export const BaseRouter = () => (
             <Route path={paths.following} element={<ConnectionsPage mode="following" />} />
             <Route path={paths.followers} element={<ConnectionsPage mode="followers" />} />
             <Route path={paths.userTweets} element={<UserTweetsPage />} />
+            <Route path={paths.profileSettings} element={<ProfileSettingsPage />} />
             <Route path={paths.feed} element={<FeedPage />} />
         </Route>
         <Route path="*" element={<Navigate to={paths.home} replace />} />

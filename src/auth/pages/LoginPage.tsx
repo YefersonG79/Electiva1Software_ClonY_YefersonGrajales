@@ -7,7 +7,7 @@ import { paths } from '../../routes/paths';
 
 export const LoginPage = () => {
     const { authState, login, loginWithGoogle } = useAuth();
-    const [username, setUsername] = useState('');
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [pending, setPending] = useState(false);
     const [error, setError] = useState('');
@@ -17,13 +17,13 @@ export const LoginPage = () => {
         && !previousPath.startsWith('//') ? previousPath : paths.home;
 
     if (authState.logged) {
-        return <Navigate to={destination} replace state={{ signedIn: true }} />;
+        return <Navigate to={destination} replace />;
     }
 
     const authenticate = async (google = false) => {
         setError('');
         setPending(true);
-        try { if (google) await loginWithGoogle(); else await login(username, password); }
+        try { if (google) await loginWithGoogle(); else await login(identifier, password); }
         catch (failure) { setError(errorMessage(failure)); }
         finally { setPending(false); }
     };
@@ -41,9 +41,9 @@ export const LoginPage = () => {
             {authState.loading && <p role="status">Restaurando sesión…</p>}
             <form onSubmit={onSignIn}>
                 <div className="mb-3">
-                    <label className="form-label" htmlFor="username">Nombre de usuario</label>
+                    <label className="form-label" htmlFor="username">Correo electrónico o nombre de usuario</label>
                     <input className="form-control" id="username" name="username" autoComplete="username"
-                        value={username} onChange={(event) => setUsername(event.target.value)} required />
+                        value={identifier} onChange={(event) => setIdentifier(event.target.value)} required />
                 </div>
                 <div className="mb-3">
                     <label className="form-label" htmlFor="password">Contraseña</label>

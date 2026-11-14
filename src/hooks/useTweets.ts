@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-    collection, documentId, getCountFromServer, limit, onSnapshot, orderBy, query, Timestamp, where,
+    collection, documentId, getCountFromServer, limit, orderBy, query, Timestamp, where,
 } from 'firebase/firestore';
 import type { Tweet } from '../data/types';
 import { requireFirebase } from '../firebase/config';
-import { errorMessage } from '../services/errors';
+import { errorMessage, reportFirestoreError } from '../services/errors';
+import { subscribeToQuery } from '../services/firestoreQueries';
 import { PAGE_SIZE } from '../utils/pagination';
 
 interface TweetResult { key: string; tweets: Tweet[]; totalItems: number; currentPage: number; error: string | null }
@@ -21,12 +22,10 @@ export const useTweets = (authorIds: string[]) => {
 
     useEffect(() => {
         let active = true;
-        let failed = false;
         const stops: (() => void)[] = [];
         const authors: string[] = JSON.parse(authorsKey);
         const { db } = requireFirebase();
         const fail = (error: unknown) => {
-            failed = true;
             if (active) setState({ key, tweets: [], totalItems: 0, currentPage: 1, error: errorMessage(error) });
         };
         const start = async () => {
@@ -37,8 +36,9 @@ export const useTweets = (authorIds: string[]) => {
             const page = Math.min(requestedPage, Math.max(1, Math.ceil(counts.reduce((a, b) => a + b, 0) / PAGE_SIZE)));
             const results: (TimedTweet[] | undefined)[] = queries.map(() => undefined);
             const versions = queries.map(() => 0);
+            const errors = queries.map(() => false);
             const update = () => {
-                if (!active || failed || results.some((result) => result === undefined)) return;
+                if (!active || errors.some(Boolean) || results.some((result) => result === undefined)) return;
                 const totalItems = counts.reduce((a, b) => a + b, 0);
                 const tweets = results.flatMap((result) => result || []).sort((a, b) =>
                     b.orderTimestamp.seconds - a.orderTimestamp.seconds
@@ -49,24 +49,27 @@ export const useTweets = (authorIds: string[]) => {
             if (!queries.length) update();
             queries.forEach((q, index) => {
                 // Each author chunk contributes its newest N candidates to the merged feed.
-                stops.push(onSnapshot(query(q, orderBy('createdAt', 'desc'), orderBy(documentId(), 'desc'), limit(page * PAGE_SIZE)),
-                    { includeMetadataChanges: true }, (snapshot) => {
+                stops.push(subscribeToQuery(query(q, orderBy('createdAt', 'desc'), orderBy(documentId(), 'desc'), limit(page * PAGE_SIZE)),
+                    'tweets: authorId IN autores, createdAt DESC, __name__ DESC (feed/perfil)', async (snapshot) => {
                         if (snapshot.metadata.hasPendingWrites || snapshot.metadata.fromCache) return;
                         const version = ++versions[index];
-                        void getCountFromServer(q).then((count) => {
-                            if (!active || version !== versions[index]) return;
-                            counts[index] = count.data().count;
-                            results[index] = snapshot.docs.flatMap((item) => {
-                                const data = item.data();
-                                return data.createdAt instanceof Timestamp
-                                    ? [{ ...data, id: item.id, createdAt: data.createdAt.toDate().toISOString(), orderTimestamp: data.createdAt } as TimedTweet] : [];
-                            });
-                            update();
-                        }).catch(fail);
-                    }, fail));
+                        const count = await getCountFromServer(q);
+                        if (!active || version !== versions[index]) return;
+                        counts[index] = count.data().count;
+                        errors[index] = false;
+                        results[index] = snapshot.docs.flatMap((item) => {
+                            const data = item.data();
+                            return data.createdAt instanceof Timestamp
+                                ? [{ ...data, id: item.id, createdAt: data.createdAt.toDate().toISOString(), orderTimestamp: data.createdAt } as TimedTweet] : [];
+                        });
+                        update();
+                    }, (error) => { errors[index] = true; fail(error); }, { includeMetadataChanges: true }));
             });
         };
-        void start().catch(fail);
+        void start().catch((error) => {
+            reportFirestoreError('tweets: recuento authorId IN autores', error);
+            fail(error);
+        });
         return () => { active = false; stops.forEach((stop) => stop()); };
     }, [authorsKey, requestedPage, key]);
 

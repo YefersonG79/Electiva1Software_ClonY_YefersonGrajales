@@ -1,6 +1,6 @@
 import {
     createUserWithEmailAndPassword, deleteUser, GoogleAuthProvider,
-    signInWithCustomToken, signInWithPopup, signOut,
+    signInWithCustomToken, signInWithEmailAndPassword, signInWithPopup, signOut,
 } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import { requireFirebase } from '../firebase/config';
@@ -37,6 +37,19 @@ export const signInByUsername = async (value: string, password: string) => {
     const signIn = httpsCallable<{ username: string; password: string }, { token: string }>(functions, 'signInWithUsername');
     const { data } = await signIn({ username, password });
     await signInWithCustomToken(auth, data.token);
+};
+
+export const signInWithCredentials = async (value: string, password: string) => {
+    const identifier = value.trim();
+    if (!identifier) throw new Error('Escribe tu correo electrónico o nombre de usuario.');
+    // A leading @ is username notation; an @ elsewhere identifies an email attempt.
+    if (identifier.includes('@', 1)) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier)) throw new Error('Escribe un correo electrónico válido.');
+        if (!password) throw new Error('Escribe tu contraseña.');
+        await signInWithEmailAndPassword(requireFirebase().auth, identifier, password);
+        return;
+    }
+    await signInByUsername(identifier, password);
 };
 
 export const signInWithGoogle = async () => {

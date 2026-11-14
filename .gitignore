@@ -18,6 +18,9 @@ dist-ssr
 *-debug.log*
 *service-account*.json
 *serviceAccount*.json
+src/tests/
+docs/
+functions/
 
 # Editor directories and files
 .vscode/*

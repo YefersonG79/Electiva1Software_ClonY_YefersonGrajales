@@ -1,4 +1,5 @@
 import { Link, useParams } from 'react-router-dom';
+import { useAuth } from '../auth/hooks/useAuth';
 import { PageHeading } from '../components/common/PageHeading';
 import { EmptyState } from '../components/common/EmptyState';
 import { Avatar } from '../components/common/Avatar';
@@ -13,6 +14,7 @@ import { paths } from '../routes/paths';
 
 export const UserTweetsPage = () => {
     const { username } = useParams();
+    const { authState } = useAuth();
     const { users, loading, error } = useSocialData();
     const user = users.find((item) => item.username === normalizeUsername(username || ''));
     const result = useTweets(user ? [user.uid] : []);
@@ -41,6 +43,7 @@ export const UserTweetsPage = () => {
                 <p className="text-body-secondary text-break mb-0">@{user.username}</p>
                 <UserStats userId={user.uid} />
             </section>
+            {user.uid === authState.user?.uid && <Link className="align-self-start m-3 mt-0" to={paths.profileSettings}>Cambiar nombre de usuario</Link>}
             <h2 className="h6 p-3 mb-0 border-top border-bottom bg-body-tertiary">Publicaciones</h2>
             <TweetList {...result} />
         </>

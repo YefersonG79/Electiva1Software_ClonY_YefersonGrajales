@@ -12,8 +12,8 @@ export const HomePage = () => {
     return (
         <>
             <PageHeading title="Inicio" subtitle="Tu comunidad" />
-            {(location.state?.registered || location.state?.signedIn) && <p className="alert alert-success m-3 mb-0" role="status">
-                {location.state?.registered ? 'Tu cuenta se creó correctamente.' : 'Iniciaste sesión correctamente.'}
+            {location.state?.registered && <p className="alert alert-success m-3 mb-0" role="status">
+                Tu cuenta se creó correctamente.
             </p>}
             <section className="card-body p-4">
                 <h2 className="h4">Hola, {authState.user?.fullName.split(' ')[0]}</h2>

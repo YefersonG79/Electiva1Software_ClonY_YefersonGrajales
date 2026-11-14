@@ -27,7 +27,7 @@ if (emulators && !existing && FirebaseAuth && FirebaseDb && FirebaseFunctions) {
 
 export const requireFirebase = () => {
     if (!FirebaseAuth || !FirebaseDb || !FirebaseFunctions) {
-        throw new Error('Configura Firebase en .env.local siguiendo docs/firebase-setup.md.');
+        throw new Error('El servicio no está configurado. Inténtalo de nuevo más tarde.');
     }
     return { auth: FirebaseAuth, db: FirebaseDb, functions: FirebaseFunctions };
 };

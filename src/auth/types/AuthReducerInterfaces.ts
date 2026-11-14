@@ -16,7 +16,7 @@ export interface AuthState {
 
 export interface AuthContextValue {
     authState: AuthState;
-    login: (username: string, password: string) => Promise<void>;
+    login: (identifier: string, password: string) => Promise<void>;
     register: (input: import('../../services/auth').RegistrationInput) => Promise<void>;
     loginWithGoogle: () => Promise<void>;
     logout: () => Promise<void>;

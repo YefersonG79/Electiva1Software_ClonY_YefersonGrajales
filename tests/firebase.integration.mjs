@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
     connectAuthEmulator, createUserWithEmailAndPassword, getAuth, GoogleAuthProvider,
-    signInWithCredential, signInWithCustomToken, signOut,
+    signInWithCredential, signInWithCustomToken, signInWithEmailAndPassword, signOut,
 } from 'firebase/auth';
 import {
     collection, collectionGroup, connectFirestoreEmulator, doc, getCountFromServer,
-    getDoc, getDocs, getFirestore, limit, onSnapshot, orderBy, query, runTransaction,
+    deleteDoc, documentId, getDoc, getDocs, getFirestore, limit, onSnapshot, orderBy, query, runTransaction,
     serverTimestamp, setDoc, setLogLevel, Timestamp, updateDoc, where, writeBatch,
 } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
@@ -55,6 +55,30 @@ async function reserve(value, identity, username) {
 
 async function rejected(promise) {
     await assert.rejects(promise, (error) => error.code === 'permission-denied');
+}
+
+// Exercise the multi-document security contract independently of the browser service.
+async function rename(value, username) {
+    const uid = value.auth.currentUser.uid;
+    return runTransaction(value.db, async (transaction) => {
+        const profileRef = doc(value.db, 'users', uid);
+        const profile = await transaction.get(profileRef);
+        const previous = profile.data().username;
+        if (previous === username) return;
+        const nameRef = doc(value.db, 'usernames', username);
+        if ((await transaction.get(nameRef)).exists()) throw new Error('Username taken');
+        transaction.set(nameRef, { uid, createdAt: serverTimestamp() });
+        transaction.update(profileRef, { username });
+        transaction.delete(doc(value.db, 'usernames', previous));
+    });
+}
+
+function renameBatch(value, uid, previous, username, { release = true, reserveName = true, extra = {} } = {}) {
+    const batch = writeBatch(value.db);
+    if (reserveName) batch.set(doc(value.db, 'usernames', username), { uid, createdAt: serverTimestamp() });
+    batch.update(doc(value.db, 'users', uid), { username, ...extra });
+    if (release) batch.delete(doc(value.db, 'usernames', previous));
+    return batch.commit();
 }
 
 function tweet(value, uid, content, extra = {}) {
@@ -133,7 +157,7 @@ export async function runIntegration() {
                 batch.set(ref, { id: ref.id, authorId: alice.uid, content: `Pagination ${i}`, createdAt: serverTimestamp() });
             }
             await batch.commit();
-            const snapshot = await getDocs(query(collection(a.db, 'tweets'), where('authorId', '==', alice.uid), orderBy('createdAt', 'desc'), limit(10)));
+            const snapshot = await getDocs(query(collection(a.db, 'tweets'), where('authorId', 'in', [alice.uid]), orderBy('createdAt', 'desc'), orderBy(documentId(), 'desc'), limit(10)));
             assert.equal(snapshot.size, 10);
             const times = snapshot.docs.map((item) => item.data().createdAt.toMillis());
             assert.ok(times.every((time, i) => i === 0 || time <= times[i - 1]));
@@ -181,6 +205,22 @@ export async function runIntegration() {
                     error.code === 'functions/unauthenticated' && !error.message.includes('@example.test'));
             }
         });
+        await check('email and password sign-in preserves the UID and existing Firestore profile', async () => {
+            const credential = await signInWithEmailAndPassword(a.auth, 'ALICE@example.test', 'Test-password-123');
+            assert.ok(credential.user.providerData.some((provider) => provider.providerId === 'password'));
+            assert.equal(credential.user.uid, alice.uid);
+            assert.equal((await getDoc(doc(a.db, 'users', credential.user.uid))).data().username, 'alice');
+            await signOut(a.auth);
+        });
+        await check('incorrect email passwords, unknown accounts and malformed emails are rejected', async () => {
+            for (const email of ['alice@example.test', 'unknown@example.test']) {
+                await assert.rejects(signInWithEmailAndPassword(a.auth, email, 'wrong-password'), (error) =>
+                    ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(error.code));
+                assert.equal(a.auth.currentUser, null);
+            }
+            await assert.rejects(signInWithEmailAndPassword(a.auth, 'invalid-email', 'Test-password-123'),
+                (error) => error.code === 'auth/invalid-email');
+        });
         await check('Google credential authentication works in the Auth emulator', async () => {
             const identityToken = [
                 Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url'),
@@ -188,6 +228,94 @@ export async function runIntegration() {
             ].join('.');
             const result = await signInWithCredential(guest.auth, GoogleAuthProvider.credential(identityToken));
             assert.equal(result.providerId, 'google.com');
+            assert.deepEqual(result.user.providerData.map((provider) => provider.providerId), ['google.com']);
+        });
+        await check('Google-only accounts cannot sign in with an unlinked password provider', async () => {
+            const email = guest.auth.currentUser.email;
+            await signOut(guest.auth);
+            await assert.rejects(signInWithEmailAndPassword(guest.auth, email, 'Test-password-123'), (error) =>
+                ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(error.code));
+            assert.equal(guest.auth.currentUser, null);
+        });
+        const r1 = client();
+        const r2 = client();
+        const one = await account(r1, 'rename-one');
+        const two = await account(r2, 'rename-two');
+        await reserve(r1, one, 'rename_one');
+        await reserve(r2, two, 'rename_two');
+        await check('atomic rename preserves UID, profile fields, private email, tweets and relationships', async () => {
+            const before = (await getDoc(doc(r1.db, 'users', one.uid))).data();
+            const privateBefore = (await getDoc(doc(r1.db, 'privateUsers', one.uid))).data();
+            await tweet(r1, one.uid, 'Before rename');
+            await follow(r1, one.uid, two.uid);
+            await rename(r1, 'renamed_one');
+            const after = (await getDoc(doc(r1.db, 'users', one.uid))).data();
+            assert.deepEqual(after, { ...before, username: 'renamed_one' });
+            assert.deepEqual((await getDoc(doc(r1.db, 'privateUsers', one.uid))).data(), privateBefore);
+            assert.equal((await getDoc(doc(r1.db, 'usernames', 'renamed_one'))).data().uid, one.uid);
+            assert.equal((await getDoc(doc(r1.db, 'usernames', 'rename_one'))).exists(), false);
+            assert.equal((await getDocs(query(collection(r1.db, 'tweets'), where('authorId', '==', one.uid)))).size, 1);
+            assert.equal((await getDoc(doc(r1.db, 'follows', one.uid, 'followEdges', two.uid))).exists(), true);
+            assert.equal(r1.auth.currentUser.uid, one.uid);
+        });
+        await check('occupied and invalid names leave the profile and both reservations intact', async () => {
+            await assert.rejects(rename(r1, 'rename_two'), /Username taken/);
+            for (const name of ['ab', 'Invalid', 'with space', 'x'.repeat(31)]) await rejected(rename(r1, name));
+            assert.equal((await getDoc(doc(r1.db, 'users', one.uid))).data().username, 'renamed_one');
+            assert.equal((await getDoc(doc(r1.db, 'usernames', 'renamed_one'))).data().uid, one.uid);
+            assert.equal((await getDoc(doc(r1.db, 'usernames', 'rename_two'))).data().uid, two.uid);
+        });
+        await check('partial renames, standalone releases and changed immutable fields are rejected atomically', async () => {
+            await rejected(deleteDoc(doc(r1.db, 'usernames', 'renamed_one')));
+            await rejected(renameBatch(r1, one.uid, 'renamed_one', 'partial_name', { release: false }));
+            await rejected(renameBatch(r1, one.uid, 'renamed_one', 'partial_name', { reserveName: false }));
+            for (const extra of [{ uid: two.uid }, { createdAt: Timestamp.fromMillis(0) }, { email: 'other@example.test' }, { fullName: 'Changed too' }]) {
+                await rejected(renameBatch(r1, one.uid, 'renamed_one', 'partial_name', { extra }));
+            }
+            assert.equal((await getDoc(doc(r1.db, 'usernames', 'partial_name'))).exists(), false);
+            assert.equal((await getDoc(doc(r1.db, 'users', one.uid))).data().username, 'renamed_one');
+            assert.equal((await getDoc(doc(r1.db, 'usernames', 'renamed_one'))).exists(), true);
+            await rejected(updateDoc(doc(r1.db, 'privateUsers', one.uid), { email: 'other@example.test' }));
+        });
+        await check('other users and signed-out clients cannot rename a profile or release its reservation', async () => {
+            await rejected(renameBatch(r2, one.uid, 'renamed_one', 'stolen_name'));
+            await rejected(deleteDoc(doc(r2.db, 'usernames', 'renamed_one')));
+            const anonymous = client();
+            await rejected(renameBatch(anonymous, one.uid, 'renamed_one', 'stolen_name'));
+            assert.equal((await getDoc(doc(r1.db, 'usernames', 'stolen_name'))).exists(), false);
+        });
+        await check('concurrent renames have one winner and retain the losing users original reservation', async () => {
+            const results = await Promise.allSettled([rename(r1, 'rename_race'), rename(r2, 'rename_race')]);
+            assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+            assert.equal(results.filter((result) => result.status === 'rejected').length, 1);
+            const winner = (await getDoc(doc(r1.db, 'usernames', 'rename_race'))).data().uid;
+            for (const [identity, original] of [[one, 'renamed_one'], [two, 'rename_two']]) {
+                assert.equal((await getDoc(doc(r1.db, 'users', identity.uid))).data().username, identity.uid === winner ? 'rename_race' : original);
+                assert.equal((await getDoc(doc(r1.db, 'usernames', original))).exists(), identity.uid !== winner);
+            }
+        });
+        await check('concurrent changes by the same owner leave exactly one reservation; retries are idempotent', async () => {
+            const results = await Promise.allSettled([rename(r1, 'same_owner_a'), rename(r1, 'same_owner_b')]);
+            assert.ok(results.some((result) => result.status === 'fulfilled'));
+            // Rules may reject a stale write before the SDK can retry its precondition.
+            for (const result of results) if (result.status === 'rejected') assert.equal(result.reason.code, 'permission-denied');
+            const current = (await getDoc(doc(r1.db, 'users', one.uid))).data().username;
+            assert.ok(['same_owner_a', 'same_owner_b'].includes(current));
+            for (const name of ['same_owner_a', 'same_owner_b', 'renamed_one']) {
+                assert.equal((await getDoc(doc(r1.db, 'usernames', name))).exists(), name === current);
+            }
+            await rename(r1, current);
+            assert.equal((await getDoc(doc(r1.db, 'usernames', current))).data().uid, one.uid);
+        });
+        await check('a released name can be reclaimed and username login resolves the same UID after rename', async () => {
+            const old = (await getDoc(doc(r2.db, 'users', two.uid))).data().username;
+            await rename(r2, 'rename_one');
+            assert.equal((await getDoc(doc(r2.db, 'usernames', old))).exists(), false);
+            const signIn = httpsCallable(r2.functions, 'signInWithUsername');
+            await assert.rejects(signIn({ username: old, password: 'Test-password-123' }), (error) => error.code === 'functions/unauthenticated');
+            await signOut(r2.auth);
+            const { data } = await signIn({ username: 'rename_one', password: 'Test-password-123' });
+            assert.equal((await signInWithCustomToken(r2.auth, data.token)).user.uid, two.uid);
         });
         console.log(`${completed.length} Firebase integration checks passed.`);
         return completed;
