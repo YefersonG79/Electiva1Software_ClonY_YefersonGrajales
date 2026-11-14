@@ -11,6 +11,17 @@ node_modules
 dist
 dist-ssr
 *.local
+.env
+.env.*
+!.env.example
+.firebase/
+*-debug.log*
+*service-account*.json
+*serviceAccount*.json
+src/tests/
+tests/
+docs/
+functions/
 
 # Editor directories and files
 .vscode/*

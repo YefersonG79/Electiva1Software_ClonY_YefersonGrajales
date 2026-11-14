@@ -1,75 +1,69 @@
-# React + TypeScript + Vite
+﻿# Clon Y — Milestone 1
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+| Academic information | Value |
+| --- | --- |
+| Course | Electiva I — Desarrollo |
+| Project | Clon Y — reconstruction of the ClonX_AI social SPA |
+| Team | Individual project; no team |
+| Member | Yeferson Grajales |
+| Repository | [Electiva1Software_ClonY_YefersonGrajales](https://github.com/YefersonG79/Electiva1Software_ClonY_YefersonGrajales) |
+| License | No license declared, as confirmed by the author. No LICENSE file is included. |
 
-Currently, two official plugins are available:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Technologies and prerequisites
 
-## React Compiler
+| Technology | Installed version / purpose |
+| --- | --- |
+| Node.js | Verified with 22.14.0 |
+| npm | Verified with 10.9.2 |
+| React / React DOM | 19.3.1; component rendering |
+| TypeScript | 5.9.3; existing type configuration |
+| Vite | 8.3.5; development and production build |
+| React Router DOM | 6.30.6; BrowserRouter and nested routes |
+| Bootstrap | 5.3.8; locally bundled CSS and built-in dark theme |
+| Firebase SDK | 13.1.0; installed for future work, inactive in this milestone |
+| Git | Source history and feature branches |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Use a current desktop browser with a viewport at least 1024 px wide. The reference layout intentionally uses a 1024 px minimum width, a centered 1140 px container, 440 px authentication cards and 40/64 px avatars. No additional CSS library or CDN is required.
 
-## Expanding the ESLint configuration
+## Installation and execution
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+For a fresh checkout:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```sh
+git clone https://github.com/YefersonG79/Electiva1Software_ClonY_YefersonGrajales.git
+cd Electiva1Software_ClonY_YefersonGrajales
+npm ci
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+Open the local URL printed by Vite. On Windows PowerShell, use `npm.cmd` in place of `npm` if script execution policy blocks `npm.ps1`; no execution-policy change is required.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```sh
+npm run lint
+npm run build
+npm run preview
 ```
+
+The build checks TypeScript before producing `dist/`. Preview serves that production directory. A deployment host must return `index.html` for SPA URLs such as `/feed` and `/users/yeferson`.
+
+Dependencies were already installed in the supplied workspace. A fresh `npm ci` was not rerun during this verification. No Firebase project, environment variables, credentials or backend are needed for the demonstration.
+
+
+## Routes
+
+| Path | View |
+| --- | --- |
+| `/login` | Public username/password demo login |
+| `/register` | Public four-field simulated registration |
+| `/` | Protected Home, counters and publication access |
+| `/publish` | Protected multiline publishing form |
+| `/following` | Protected followed users, alphabetically sorted |
+| `/followers` | Protected followers and conditional Follow buttons |
+| `/users/:username` | Protected profile, counters and newest-first tweets |
+| `/feed` | Protected tweets from the current user and followed users |
+
+
+## License
+
+The author confirmed that this is an individual project without a declared license. This repository does not assign a new license to the reference project or third-party dependencies; their own notices remain applicable. Selecting a project license is pending the author's decision.
